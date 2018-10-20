@@ -1,0 +1,7 @@
+/* Keep the sidebare visible in by sticking it when scrolling */
+div.sphinxsidebar {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+}

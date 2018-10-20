@@ -1,0 +1,5 @@
+build/
+.mypy_cache/
+.pytest_cache/
+_pmm/
+.python-version
