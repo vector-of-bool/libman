@@ -24,7 +24,10 @@ endif()
 find_package(Boost 1.68 REQUIRED filesystem)
 find_package(Catch2 REQUIRED)
 
+find_package(Bikeshed)
+
 add_subdirectory(src)
+add_subdirectory(data)
 
 option(BUILD_TESTING "Build tests" ON)
 if(BUILD_TESTING AND (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR))

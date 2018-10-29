@@ -1,0 +1,535 @@
+<pre class='metadata'>
+Title: <code>libman</code>, A Dependency Manager ➔ Build System Bridge
+Shortname: cxx-libman
+Level: 1
+Status: DREAM
+Group: wg21
+<!-- URL: https://vector-of-bool.github.io/libman-spec.html -->
+Markup Shorthands: markdown yes
+Editor: Colby Pike, vectorofbool@gmail.com, https://vector-of-bool.github.io/
+Abstract: An exploration on a solution to giving build systems a way to
+Abstract: consume packages presented to it by a dependency manager. This system
+Abstract: is called <code>libman</code>, short for *Library Manifest*.
+</pre>
+
+# Introduction and Overview # {#intro}
+
+## Problem Description and Scope ## {#intro.problem}
+
+C++ is late to the game in terms of a unified and cross-platform solution for
+easily distributing native libraries.
+
+There are “native” / “system” package managers and package formats, such as
+`dpkg`/`apt`, `yum`/`rpm`, `pacman`, and MSI that address a core problem of
+managing the global state of a given machine, and these packaging formats often
+deal with “native” compiled binaries. These solutions are not cross-platform,
+and even if they were, none of them are appropriate for the problem at hand.
+They are not focused on development and compilation within the C++ ecosystem.
+While other languages and ecosystems have tools such as pip, npm, cargo, mix,
+and even cpan, C++ has gone a long time with no widely-accepted solution.
+
+Why is this?
+
+There have been many attempts, and there are presently several competing
+alternatives for solving the package and dependency management problem. Running
+in parallel, and solving a (somewhat) orthogonal problem, are several competing
+build systems. CMake, Meson, Waf, b2, and countless others have been pining for
+the love and attention of the C++ community for years. All of them wildly
+incompatible in terms of their package consumption formats.
+
+This situation presents a unique problem. With lack of a “reference
+implementation” of C++, and no singular and completely universal build tool and
+format, we have an N:M problem of N package and dependency managers attempting
+to work with M build systems.
+
+This trouble can be broken down in two directions:
+
+1. How do I, the build system, inform a package creation and distribution tool
+    how my project should be built and collected into a distributable unit?
+2. How do I, the dependency manager, inform the build system how it might
+    consume the packages I've provided to it?
+
+This paper and the `libman` system described will cover (2). Investigation into
+the inverse (yet equally important) problem (1) will not be discussed in detail,
+but warrants further discussion.
+
+Note: This document will use the abbreviated term *PDM* to refer to "package
+and dependency manager" tools.
+
+
+## Usage Requirements ## {#intro.usage-requirements}
+
+The concept of usage requirements originated from Boost’s b2 build system, and
+has been slowly bleeding into general acceptance via CMake. After years of
+experience with CMake, and as it has been developing and maturing its
+realization of usage requirements and the concept of the “usage interface,” it
+is clear that it is a fruitful path forward. As such, `libman` is explicitly
+designed around this concept.
+
+What are “usage requirements” (also known as the “link interface” or “usage
+interface”)?
+
+When we have a “target” (A thing that one wishes to build), we can say that it
+“uses” a library. When we “use” a library, we need to inherit certain
+attributes thereof which have a direct effect on the way that the final target
+will be built. These include, **but are not limited to**:
+
+- What header search paths do we need? This ensures that the consumer target
+    is able to #include the files from the library being consumed.
+- What files do we need to include in the link phase? This ensures that
+    entities with external linkage declared in the library’s headers are
+    available for symbol resolution during the final link.
+- What link/compile options are required? In some rare cases, consuming a
+    library will require that certain options be enabled/disabled on the compile
+    or link phase. This is not recommended, but is still very common.
+- Who else do we need to “use”? Library composition isn’t a new idea, and it
+    encourages modularity and encapsulation. To ensure that we are able to
+    consume a library which builds upon another, we need to be sure that we can
+    also use the transitive dependencies. This recurses through the “usage”
+    directed graph until we have satisfied all of the usage requirements.
+
+`libman` defines a platform-agnostic and build-system-agnostic format for
+describing these “usage requirements”, including how one should import
+dependencies transitively. Any build system which can represent the above
+concepts can import `libman` files. Any PDM which can represent the above
+concepts can generate `libman` files.
+
+Therefore, any `libman`-capable build system can be used with any
+`libman`-capable package and dependency manager.
+
+
+## Goals and Non-Goals ## {#intro.goals}
+
+The following are the explicit goals of `libman` and this document:
+
+1. Define a series of file formats which tell a build system how a library is
+    to be "used"
+2. Define the semantics of how a build system should interact and perform
+    name-based package and dependency lookup in a deterministic fashion with no
+    dependence on "ambient" environment state.
+3. Define the requirements from a PDM for generating a correct and coherent
+    set of `libman` files.
+
+Perhaps just as important as the goals are the non-goals. In particular,
+`libman` **does not** seek to do any of the following:
+
+1. Define the semantics of ABI and version compatibility between libraries
+2. Facilitate dependency resolution beyond trivial name-based path lookup
+3. Define a distribution or packaging method for pre-compiled binary packages
+4. Define or aide package retrieval and extraction
+5. Define or aide source-package building
+
+
+## The File Format ## {#into.file-format}
+
+`libman` specifies three classes of files:
+
+- *The Index* - Only one *Index* file will be used at a time when resolving
+    package requirements. This file describes a direct mapping between a package
+    *name* and the path to the corresponding...
+- *Package Manifest* - This file simply describes some general attributes about
+    how the package's libraries needs to be imported. It does not contain much
+    in the way of package metadata, as this file is only relevant to build
+    systems. The most important is this files list of `Library` fields, each of which name the path to a...
+- *Library Manifest* - Where the real meat of the format resides. A single
+    *Library* manifest describes exactly one "importable" library. The library
+    may or may not even have a linkable (e.g., a "header-only" library).
+
+See the respective sections on [[#file.syntax|The Manifest Syntax]], and
+the specifics on [[#file.index|Index Files]], [[#file.package|Package Files]],
+and [[#file.library|Library Files]].
+
+
+# The File Format # {#file}
+
+## Base Syntax ## {#file.syntax}
+
+All libman files are encoded in an extremely simple key-value plaintext format,
+which is easy to read and write for both human and machine alike. Files are
+encoded using UTF-8.
+
+The syntax of the file is very simple:
+
+```yaml
+# This is a comment
+Some-Key: Some-Value
+```
+
+Keys and values in the file each appear on a different line, with the key and
+value being separated by a <code>: </code> (colon followed by a space
+character). Only a single space character after the colon is required. Trailing
+or leading whitespace from the keys and values is ignored. If a colon is
+followed by an immediate line-ending, end-of-file, or the right-hand of the
+key-value separator is only whitespace, the value for the associated key is an
+empty string.
+
+The key and value together form a **field**.
+
+Note: A colon is allowed to be a character in a key (but cannot be the final
+character).
+
+Note: As a general rule, `libman` uses the hyphen `-` as a word separator in
+keys, with each word being capitalized. This matches the form of headers from
+HTTP and SMTP.
+
+Advisement: Unlike HTTP, `libman` keys are case-sensitive!
+
+A field with a certain key might appear multiple times in the file. The
+semantics thereof depend on the semantics of the field and file. In general, it
+is meant to represent "appending" to the list of the corresponding key.
+
+Each file in `libman` defines a set of acceptable fields. The appearance of
+unspecified fields is not allowed, and should be met with a user-visible warning
+(but not an error). There is an exception for keys beginning with `X-`, which
+are reserved for tool-specific extensions. The presence of an unrecognized key
+beginning with `X-` is not required to produce a warning.
+
+Lines in which the first non-whitespace character is a `#` should be ignored.
+
+“Trailing comments” are not supported. A `#` appearing in a key or value must
+be considered a part of that key or value.
+
+Empty or only-whitespace lines are ignored.
+
+A line-ending is not required at the end of the file.
+
+Note: Readers are expected to accept a single line feed `\n` as a valid
+line-ending. Because trailing whitespace is stripped, a CR-LF `\r\n` is
+incidentally a valid line-ending and should result in an identical parse.
+
+
+## Index Files ## {#file.index}
+
+Index files specify the names of available packages and the path to a
+[[#file.package|Package File]] that can be used to consume them.
+
+The index file should use the `.lmi` extension.
+
+
+### Fields ### {#file.index.fields}
+
+#### `Type` #### {#file.index.fields.type}
+
+The `Type` field must be specified *exactly once*, and should have the literal
+value `Index`.
+
+```yaml
+Type: Index
+```
+
+
+#### `Package` #### {#file.index.fields.package}
+
+The `Package` field appears any number of times in a file, and specifies a
+package *name* and a *path* to a [[#file.package|Package File]] on disk. If
+a relative path, the path resolves relative to the directory containing the
+index file.
+
+The name and path are separated by a semicolon `;`. Extraneous whitespace
+is stripped
+
+```yaml
+Package: Boost; /path/to/boost.lmp
+Package: Qt; /path-to/qt.lmp
+Package: POCO; /path-to-poco.lmp
+Package: SomethingElse; relative-path/anything.lmp
+```
+
+The appearance of two `Package` fields with the same package name is not
+allowed and consumers should produce an **error** upon encountering it.
+
+
+### Example ### {#file.index.example}
+
+<div class="example">
+A simple Index file with a few packages
+
+```yaml
+# This is an index file
+Type: Index
+# Some Packages
+Package: Boost; /path/to/boost.lmp
+Package: Qt; /path-to/qt.lmp
+Package: POCO; /path-to-poco.lmp
+Package: SomethingElse; relative-path/anything.lmp
+```
+</div>
+
+
+## Package Files ## {#file.package}
+
+Package files are found via [[#file.index|Index Files]], and they specify some
+number of [[#file.library|Library Files]] to import.
+
+Package files should use the `.lmp` extension.
+
+
+### Fields ### {#file.package.fields}
+
+#### `Type` #### {#file.package.fields.type}
+
+The `Type` field must be specified *exactly once*, and should have the literal
+value `Package`.
+
+```yaml
+Type: Package
+```
+
+
+#### `Name` #### {#file.package.fields.name}
+
+The `Name` field in a package file should be the name of the package, and
+should match the name of the package present in the index that points to the
+file defining the package. If `Name` is not present or not equal to the name
+provided in the index, consumers are not required to generate a warning. It’s
+purpose is for the querying of individual package files and for human
+consumption.
+
+```yaml
+Name: Boost
+```
+
+
+#### `Namespace` #### {#file.package.fields.namespace}
+
+The `Namespace` field in a package file must appear *exactly once*. It is
+not required to correspond to any C++ `namespace`, and is purely for the
+namespaces of the import information for consuming tools. For example, CMake
+may prepend the `Namespace` and two colons `::` to the name of imported targets
+generated from the `libman` manifests.
+
+```yaml
+Namespace: Qt5
+```
+
+Note: The `Namespace` is not required to be unique between packages. Multiple
+packages may declare themselves to share a `Namespace`, such as modularized
+Boost packages.
+
+
+#### `Requires` #### {#file.package.fields.requires}
+
+The `Requires` field may appear multiple times, each time specifying the name
+of a package which is required in order to use the requiring package.
+
+When a consumer encounters a `Requires` field, they should use the
+[[#file.index|index file]] to find the package specified by the given name. If
+no such package is listed in the index, the consumer should generate an error.
+
+```yaml
+Requires: Boost.Filesystem
+Requires: Boost.Coroutine2
+Requires: fmtlib
+```
+
+Note: The presence of `Requires` **does not** create any usage requirements on
+the libraries of the package. It is up to the individual libraries of the
+requiring package to explicitly call out their usage of libraries from other
+packages via their [[#file.library.fields.uses]] field. This field is purely to
+ensure that the definitions from the other package are imported before the
+library files are processed.
+
+
+#### `Library` #### {#file.package.fields.library}
+
+The `Library` field specifies the path to a [[#file.library|library file]]. Each
+appearance of the `Library` field specifies another library which should be
+considered as part of the package.
+
+```yaml
+Library: filesystem.lml
+Library: system.lml
+Library: coroutine2.lml
+```
+
+If a relative path, the file path should be resolved relative to the directory
+of the package file.
+
+Note: The filename of a `Library` field is not significant other than in
+locating the library file to import.
+
+
+### Example ### {#file.package.example}
+
+<div class="example">
+A Qt5 example:
+
+```yaml
+# A merged Qt5
+Type: Package
+Name: Qt5
+Namespace: Qt5
+
+# Some things we might require
+Requires: OpenSSL
+Requires: Xcb
+
+# Qt libraries
+Library: Core.lml
+Library: Widgets.lml
+Library: Gui.lml
+Library: Network.lml
+Library: Quick.lml
+# ... (Qt has many libraries)
+```
+</div>
+
+
+## Library Files ## {#file.library}
+
+Library files are found via [[#file.package|Package Files]], and each one
+specifies exactly one "library" with a set of usage requirements.
+
+Library files should use the `.lml` extension.
+
+
+### Fields ### {#file.library.fields}
+
+#### `Type` #### {#file.library.fields.type}
+
+The `Type` field must be specified *exactly once*, and should have the literal
+value `Library`.
+
+```yaml
+Type: Library
+```
+
+
+#### `Name` #### {#file.library.fields.name}
+
+The `Name` field must appear exactly once. Consumers should qualify this name
+with the containing package’s [[#file.package.fields.namespace|Namespace]]
+field to form the identifier for the library.
+
+```yaml
+Name: Boost
+```
+
+
+#### `Path` #### {#file.library.fields.path}
+
+For libraries which provide a linkable, the `Path` field specifies the path to a
+file which should be linked into executable binaries.
+
+This field may be omitted for libraries which do not have a linkable (e.g.
+“header-only” libraries).
+
+```yaml
+Path: lib/libboost_system-mt-d.a
+```
+
+
+#### `Include-Path` #### {#file.library.fields.include-path}
+
+Specifies a directory path in which the library’s headers can be found. Targets
+which use this library should have the named directory appended to their header
+search path. (e.g. using the -I or -isystem flag in GCC).
+
+This field may appear any number of times. Each appearance will specify an
+additional search directory.
+
+Relative paths should resolve relative to the directory containing the library
+file.
+
+```yaml
+Include-Path: include/
+Include-Path: src/
+```
+
+
+#### `Preprocessor-Define` #### {#file.library.fields.preprocessor-define}
+
+Sets a preprocessor definition that is required to use the library.
+
+Note: This should not be seen as an endorsement of this design!
+
+Should be either a legal C identifier, or a C identifier and substitution value
+separated with an `=`. (The syntax used by MSVC and GNU-style compiler command
+lines).
+
+```yaml
+Preprocessor-Define: SOME_LIBRARY
+Preprocessor-Define: SOME_LIBRARY_VERSION=339
+```
+
+
+#### `Uses` #### {#file.library.fields.uses}
+
+Specify a *transitive requirement* for using the library. This must be of the
+format `<namespace>/<library>`, where `<namespace>` is the string used in the
+[[#file.package.fields.namespace|Namespace]] field of the package which defines
+`<library>`, and `<library>` is the [[#file.library.fields.name|Name]] field of
+the library which we intend to use transitively.
+
+```yaml
+Uses: Boost/coroutine2
+Uses: Boost/system
+```
+
+Build systems should use the `Uses` field to apply transitive imported library
+target usage requirements. “Using” targets should transitively “use” the
+libraries named by this field.
+
+
+### Example ### {#file.library.example}
+
+<div class="example">
+A Catch2 base library, only declaring a directory that needs to be included. It
+has no `Path` attribute, and therefore acts as a "header-only" library.
+
+```yaml
+Type: Library
+Name: Catch2
+Include-Path: include/
+```
+
+A library that builds upon the main Catch header-only library to provide a
+pre-compiled `main()` function, a common use-case with Catch
+
+```yaml
+Type: Library
+# The name is "main"
+Name: main
+# The static library file to link to
+Path: lib/catch_main.a
+# We build upon the Catch2/Catch2 sibling library.
+Uses: Catch2/Catch2
+```
+</div>
+
+
+<div class="example">
+A more concrete example of what a few Boost library files might look like
+
+```yaml
+# The base "headers" library for Boost
+Type: Library
+Name: boost
+Include-Path: include/
+```
+
+```yaml
+# Boost.System
+Type: Library
+Name: system
+Uses: Boost/boost
+Path: lib/libboost_system.a
+```
+
+```yaml
+# Boost.Asio
+Type: Library
+Name: asio
+# Note: Does not depend on Boost/boost nor Boost/context directly. It inherits
+# those transitively.
+Uses: Boost/system
+Uses: Boost/coroutine
+```
+
+```yaml
+# Boost.Beast
+Type: Library
+Name: beast
+Uses: Boost/asio
+```
+</div>
