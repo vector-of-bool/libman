@@ -165,7 +165,7 @@ function(_lm_import_lib pkg namespace lib_path)
                 )
         endif()
         # Add the include directories
-        foreach(inc IN LISTS lib__Include)
+        foreach(inc IN LISTS lib__Include-Path)
             _lm_resolve_path_from_file(inc "${lib_path}")
             file(APPEND
                 "${lib_cmake_file}.tmp"
@@ -173,7 +173,7 @@ function(_lm_import_lib pkg namespace lib_path)
                 )
         endforeach()
         # Add the preprocessor definitions (yuck)
-        foreach(def IN LISTS lib__Define)
+        foreach(def IN LISTS lib__Preprocessor-Define)
             file(APPEND
                 "${lib_cmake_file}.tmp"
                 "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS [[${def}]])\n"
@@ -182,7 +182,7 @@ function(_lm_import_lib pkg namespace lib_path)
         # Add the transitive usage information (interface links)
         foreach(use IN LISTS lib__Uses lib__Links)
             if(NOT use MATCHES "^(.+)/(.+)$")
-                message(FATAL_ERROR "Cannot resolive invalid transitive usage on ${target_name}: ${use}")
+                message(FATAL_ERROR "Cannot resolve invalid transitive usage on ${target_name}: ${use}")
                 continue()
             endif()
             set(use_ns "${CMAKE_MATCH_1}")
