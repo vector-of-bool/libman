@@ -97,6 +97,126 @@ class LibMan(Generator):
         return files
 
 
+def _fill_user_info_cmake(
+        cf: conans.ConanFile,
+        index: 'libman.data.Index',
+        user_info: conans.model.user_info.UserInfo,
+        args: dict,
+):
+    targets_file_path = cf.build_folder / Path(
+        args.pop('targets_file', 'targets.cmake'))
+    tf_content = targets_file_path.read_text()
+    add_lib_re = re.compile(r'add_library\((?P<name>\S+) \w+ IMPORTED\)')
+    libs = []
+    for mat in add_lib_re.finditer(tf_content):
+        name = mat.group('name')
+        cf.output.info(f'Exporting CMake-generate library `{name}`')
+        libs.append(name)
+
+    set_properties_call_re = re.compile(
+        r'set_target_properties\((\S+) PROPERTIES[\s\n]+(.*?)[\s\n]+\)',
+        re.MULTILINE)
+    lib_data = {
+        n: {
+            'uses': [],
+            'links': [],
+            'special-uses': [],
+            'path': None,
+        }
+        for n in libs
+    }
+    pkg_requires = set()
+
+    link_only_re = re.compile(r'\$<LINK_ONLY:(.*)>')
+    ns_target_re = re.compile(r'(\S+?)::(\S+)')
+
+    knowns_libs = {}
+    for pkg in index:
+        pkg = libman.parse.parse_package_file(pkg.path)
+        namespace = pkg.namespace
+        for lib in pkg.libraries:
+            lib = libman.parse.parse_library_file(lib)
+            knowns_libs[(pkg.name, lib.name)] = {
+                'library': lib,
+                'package': pkg,
+            }
+
+    def parse_namespaced_lib(target: str, dest: List[str], namespace: str,
+                             lib: str):
+        found = knowns_libs.get((namespace, lib))
+        if not found:
+            cf.output.warn(
+                f'Target `{target}` links to known library `{namespace}::{lib}`'
+            )
+            return
+        pkg_requires.add(found['package'].name)
+        dest.append(f'{namespace}/{lib}')
+
+    def parse_single_lib(target: str, lib: str):
+        mat = link_only_re.match(lib)
+        key = 'uses'
+        if mat:
+            lib = mat.group(1)
+            key = 'links'
+
+        dest = lib_data[target]
+        specials = dest['special-uses']
+        if lib == 'Threads::Threads':
+            specials.append('Threading')
+        elif lib == 'm':
+            specials.append('Math')
+        elif lib == 'dl':
+            specials.append('DynamicLinking')
+        else:
+            mat = ns_target_re.match(lib)
+            if not mat:
+                cf.output.warn(
+                    f'Target "{target}" links to non-Conan library {lib}')
+            pkg_namespace, pkg_lib = mat.groups()
+            parse_namespaced_lib(target, dest[key], pkg_namespace, pkg_lib)
+
+    def parse_link_libs(target: str, libs: str):
+        libs = [l for l in libs.split(';') if l]
+        for l in libs:
+            parse_single_lib(target, l)
+
+    for mat in set_properties_call_re.finditer(tf_content):
+        libname = mat.group(1)
+        prop_args = shlex.split(mat.group(2).replace('\\$', '$'))
+        cf.output.info(f'Set properties: {prop_args}')
+        while prop_args:
+            key, value, prop_args = prop_args[0], prop_args[1], prop_args[2:]
+            if key == 'INTERFACE_LINK_LIBRARIES':
+                parse_link_libs(libname, value)
+
+    cf.output.info(lib_data)
+    return {
+        'libraries': lib_data,
+        'requires': pkg_requires,
+    }
+
+
+def fill_user_info(cf: conans.ConanFile, mode, **kwargs):
+    _libman_check()
+
+    index_file_path = Path(cf.build_folder) / 'conan.lmi'
+    if not index_file_path.exists():
+        raise RuntimeError(
+            'No conan.lmi index file was found. Did you run the libman Conan generator?'
+        )
+    user_info: conans.model.user_info.DepsUserInfo = cf.user_info
+    index: libman.data.Index = libman.parse.parse_index_file(index_file_path)
+    cf.output.info('Exporting libman linking information')
+
+    if mode == 'cmake':
+        ret = _fill_user_info_cmake(cf, index, user_info, kwargs)
+
+    for k in kwargs:
+        cf.output.warn(f'Unknown keyword argument to fill_user_info(): {k}')
+
+    return ret
+
+
 class ConanFile(conans.ConanFile):
     name = 'libman-generator'
     version = '0.1.0'
