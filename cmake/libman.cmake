@@ -153,7 +153,9 @@ function(_lm_import_lib pkg namespace lib_path)
         set(target_name "${namespace}::${lib__Name}")
         file(APPEND
             "${lib_cmake_file}.tmp"
-            "add_library([[${target_name}]] IMPORTED ${linkage})\n\n"
+            "add_library([[${target_name}]] IMPORTED ${linkage})\n"
+            "set_property(TARGET [[${target_name}]] PROPERTY _LIBMAN_OWNING_PACKAGE ${pkg})\n"
+            "set_property(TARGET [[${target_name}]] PROPERTY _LIBMAN_QUALIFIED_NAME ${namespace}/${lib__Name})\n\n"
             )
         # Set the import location, if applicable
         if(lib__Path)
