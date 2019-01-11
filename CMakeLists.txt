@@ -7,6 +7,8 @@ project(libman
     DESCRIPTION "A portable way to represent libraries in a dependency tree"
     )
 
+include(libman)
+
 # Randomly pick between using vcpkg or Conan, to ensure that we are always able
 # to build with either
 include(pmm.cmake)
@@ -37,3 +39,9 @@ endif()
 add_subdirectory(extras)
 
 add_subdirectory(docs)
+
+export_package(
+    NAMESPACE lm
+    HEADER_ROOTS src
+    TARGETS libman
+    )
