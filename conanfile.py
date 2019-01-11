@@ -1,12 +1,11 @@
 import conans
 
+
 class ConanFile(conans.ConanFile):
     name = 'libman'
     version = '0.1.0'
-    requires = (
+    build_requires = (
         'catch2/2.3.0@bincrafters/stable',
-        'spdlog/1.1.0@bincrafters/stable',
-        'boost/1.68.0@conan/stable',
     )
     generators = 'cmake'
     exports_sources = '*'

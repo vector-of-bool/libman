@@ -14,14 +14,13 @@ string(RANDOM LENGTH 1 ALPHABET 01 use_vcpkg)
 if(use_vcpkg OR LIBMAN_USE_VCPKG)
     pmm(VCPKG
         REVISION 43deeaf0c8b6086310ee753be2e93c941f7ffd75
-        REQUIRES boost-filesystem catch2
+        REQUIRES catch2
         )
 else()
     pmm(CONAN)
     conan_set_find_paths()
 endif()
 
-find_package(Boost 1.68 REQUIRED filesystem)
 find_package(Catch2 REQUIRED)
 
 find_package(Bikeshed)
