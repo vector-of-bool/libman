@@ -1,232 +1,238 @@
 import conans
-import sys
 from pathlib import Path
 from itertools import chain
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from conans.model import Generator
-from conans.client.output import ConanOutput
+
+
+LIBMAN_CMAKE_EXT = r'''
+set(LIBMAN_INDEX
+    "${CMAKE_CURRENT_LIST_DIR}/conan.lmi"
+    CACHE INTERNAL
+    "Path to Conan-generated LibMan index"
+    )
+'''
+
+
+def _libman_check():
+    if libman is None:
+        raise RuntimeError(
+            '`libman-conan` requires the `libman` Python library to be installed'
+        )
+
+
+class LibManLibrary:
+    def __init__(
+            self,
+            name: str,
+            paths: List[Path],
+            includes: List[Path],
+            defines: List[str],
+            uses: List[str],
+            special_uses: List[str],
+            infos: List[str],
+            warnings: List[str],
+    ):
+        self.name = name
+        self.paths = paths
+        self.include_paths = includes
+        self.defines = defines
+        self.uses = uses
+        self.special_uses = special_uses
+        self.infos = infos
+        self.warnings = warnings
+
+    @classmethod
+    def find_linkable(cls, lib: str, lib_paths: List[str]) -> Optional[Path]:
+        for lib_path in lib_paths:
+            lib_path = Path(lib_path)
+            candidates = chain(
+                lib_path.glob(f'lib{lib}.a'),
+                lib_path.glob(f'lib{lib}.lib'),
+                lib_path.glob(f'lib{lib}.so'),
+                lib_path.glob(f'{lib}.dll'),
+            )
+            try:
+                return next(iter(candidates))
+            except StopIteration:
+                pass
+        # No linkable found
+        return None
+
+    @classmethod
+    def generate_default(
+            cls, name: str,
+            cpp_info: conans.model.build_info.CppInfo) -> 'LibManLibrary':
+        include_paths = [Path(p) for p in cpp_info.include_paths]
+        defines = list(cpp_info.defines)
+        paths: List[Path] = []
+        specials: List[str] = []
+        infos: List[str] = []
+        warnings: List[str] = []
+        uses = []  # We don't fill this out for default-generated libs
+        for lib in cpp_info.libs:
+            # Generate a path item for each library
+            special_by_lib = {
+                'pthread': 'Threading',
+                'dl': 'DynamicLinking',
+                'm': 'Math',
+            }
+            special = special_by_lib.get(lib)
+            if special:
+                infos.append(
+                    f'Link to `{lib}` being interpreted as special requirement "{special}"'
+                )
+                specials.append(special)
+            else:
+                found = cls.find_linkable(lib, cpp_info.lib_paths)
+                if found:
+                    warnings.append(
+                        f'Library has no libman metadata and was generated automatically: {found}'
+                    )
+                    paths.append(found)
+                else:
+                    warings.append(f'Unresolved library {name}')
+        return LibManLibrary(
+            name,
+            paths,
+            include_paths,
+            defines,
+            uses,
+            specials,
+            infos,
+            warnings,
+        )
+
+
+class LibManPackage:
+    def __init__(self, name: str, ns: str, requires: List[str],
+                 libs: List[LibManLibrary], has_libman_data: bool) -> None:
+        self.name = name
+        self.namespace = ns
+        self.requires = requires
+        self.libs = libs
+        self.has_libman_data = has_libman_data
+
+    @staticmethod
+    def create(name: str, cpp_info: conans.model.build_info.CppInfo,
+               user_info: conans.model.user_info.UserInfo) -> 'LibManPackage':
+        reqs = list(cpp_info.public_deps)
+        ns = name
+        lm_info = user_info.vars.get('libman')
+        has_libman = lm_info is not None
+        if has_libman:
+            ns = lm_info.namespace
+            libs = LibMan
+        else:
+            libs = [LibManLibrary.generate_default(name, cpp_info)]
+        return LibManPackage(name, ns, reqs, libs, has_libman)
+
+    def _generate_library_file(self, all_pkgs: Dict[str, 'LibManPackage'],
+                               lib: LibManLibrary) -> Dict[str, str]:
+        lines = [
+            '# libman library file generate by Conan. DO NOT EDIT.',
+            'Type: Library',
+            f'Name: {lib.name}',
+        ]
+        for inc in lib.include_paths:
+            lines.append(f'Include-Path: {inc}')
+        for def_ in lib.defines:
+            lines.append(f'Preprocessor-Define: {def_}')
+        for path in lib.paths:
+            lines.append(f'Path: {path}')
+        for special in lib.special_uses:
+            lines.append(f'Special-Uses: {special}')
+        for uses in lib.uses:
+            lines.append(f'Uses: {uses}')
+
+        if not self.has_libman_data:
+            # The package did not expose libman data, so we must generate some
+            # important information ourselves manually
+            for req in self.requires:
+                other_pkg = all_pkgs[req]
+                if not other_pkg.has_libman_data:
+                    lines.append(f'Uses: {other_pkg.name}/{other_pkg.name}')
+                else:
+                    for other_lib in other_pkg.libs:
+                        lines.append(
+                            f'Uses: {other_pkg.namespace}/{other_lib.name}')
+
+        lml_path = f'{self.name}-libs/{lib.name}.lml'
+        return {f'lm/{lml_path}': '\n'.join(lines)}, lml_path
+
+    def generate_files(self,
+                       pkgs: Dict[str, 'LibManPackage']) -> Dict[str, str]:
+        lines = [
+            '# Libman package file generated by Conan. DO NOT EDIT',
+            'Type: Package',
+            f'Name: {self.name}',
+            f'Namespace: {self.namespace}',
+        ]
+        for req in self.requires:
+            lines.append(f'Requires: {req}')
+
+        lmp_path = f'lm/{self.name}.lmp'
+        ret = {}
+        for lib in self.libs:
+            more, lml_path = self._generate_library_file(pkgs, lib)
+            ret.update(more)
+            lines.append(f'Library: {lml_path}')
+        ret[lmp_path] = '\n'.join(lines)
+        return ret, lmp_path
 
 
 class LibMan(Generator):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.log = ConanOutput(sys.stderr)
+        self.output = self.conanfile.output
 
     @property
     def filename(self):
         pass
 
-    def _generate_package_file(self, name: str, dep: conans.model.build_info.CppInfo) -> str:
-        lines = [
-            '# libman package file generated by Conan',
-            'Type: Package',
-            f'Name: {name}',
-            f'Namespace: {name}',
-            f'Library: {name}/lib.lml',
-        ]
-        for req in dep.public_deps:
-            lines.append(f'Requires: {req}')
-
-        return '\n'.join(lines)
-
-    def _add_lib(self, lines: List[str], lib: str, lib_paths: List[str]):
-        if lib == 'pthread':
-            self.log.info('Found link to `pthread`. Adding special requirement "Threading"')
-            lines.append(f'Special-Uses: Threading')
-            return
-        for libdir in lib_paths:
-            libdir = Path(libdir)
-            candidates = chain(
-                libdir.glob(f'lib{lib}.a'),
-                libdir.glob(f'lib{lib}.lib'),
-                libdir.glob(f'lib{lib}.so'),
-                libdir.glob(f'{lib}.dll'),
-            )
-            for cand in candidates:
-                lines.append(f'Path: {cand}')
-                self.log.info(f'Selected {cand} as linkable for {lib}')
-                return
-        raise RuntimeError(f'No linkable for "{lib}"" in search directories {lib_paths}')
-
-    def _generate_library_files(self, name: str, dep: conans.model.build_info.CppInfo) -> Dict[str, str]:
-        fname = f'{name}/lib.lml'
-        lines = [
-            f'# Library file generated for {name} by Conan',
-            f'Type: Library',
-            f'Name: {name}',
-        ]
-        for inc in dep.include_paths:
-            lines.append(f'Include-Path: {inc}')
-        for def_ in dep.defines:
-            lines.append(f'Preprocessor-Define: {def_}')
-        for lib in dep.libs:
-            self._add_lib(lines, lib, dep.lib_paths)
-        return {f'lm/{fname}': '\n'.join(lines)}
-
-    def _generate_one_dep(self, name: str, dep: conans.model.build_info.CppInfo) -> str:
-        pkg_file = self._generate_package_file(name, dep)
-        lmp_path = f'lm/{name}.lmp'
-        ret = {
-            lmp_path: pkg_file,
-        }
-        ret.update(self._generate_library_files(name, dep))
-        return ret, lmp_path
-
-    def _generate_from_deps_info(self, deps: conans.model.build_info.DepsCppInfo) -> Dict[str, str]:
+    def _generate_from_deps_info(
+            self, build_infos: conans.model.build_info.DepsCppInfo,
+            user_infos: conans.model.user_info.DepsUserInfo) -> Dict[str, str]:
         ret = {}
         index_lines = [
             'Type: Index',
         ]
-        for name, depinfo in deps.dependencies:
-            more, lmp_path = self._generate_one_dep(name, depinfo)
+        all_pkgs: Dict[str, LibManPackage] = {}
+        for name, cpp_info in build_infos.dependencies:
+            user_info = user_infos[name]
+            all_pkgs[name] = LibManPackage.create(name, cpp_info, user_info)
+
+        ret = {}
+        for name, pkg in all_pkgs.items():
+            more, lmp_path = pkg.generate_files(all_pkgs)
             ret.update(more)
             index_lines.append(f'Package: {name}; {lmp_path}')
+            for lib in pkg.libs:
+                for info in lib.infos:
+                    self.output.info(f'{pkg.name}/{lib.name}: {info}')
+                for warning in lib.warnings:
+                    self.output.warn(f'{pkg.name}/{lib.name}: {warning}')
+
         ret['conan.lmi'] = '\n'.join(index_lines)
         lm_pkg_dir = self.deps_build_info['libman-generator'].rootpath
         libman_cmake = (Path(lm_pkg_dir) / 'libman.cmake').read_text()
-        libman_cmake += r'''
-        set(LIBMAN_INDEX "${CMAKE_CURRENT_LIST_DIR}/conan.lmi" CACHE INTERNAL "Path to Conan-generated LibMan index")
-        '''
+        libman_cmake += LIBMAN_CMAKE_EXT
         ret['conan-libman.cmake'] = libman_cmake
         return ret
 
     @property
     def content(self):
-        files = self._generate_from_deps_info(self.deps_build_info)
+        files = self._generate_from_deps_info(self.deps_build_info,
+                                              self.deps_user_info)
         return files
-
-
-def _fill_user_info_cmake(
-        cf: conans.ConanFile,
-        index: 'libman.data.Index',
-        user_info: conans.model.user_info.UserInfo,
-        args: dict,
-):
-    targets_file_path = cf.build_folder / Path(
-        args.pop('targets_file', 'targets.cmake'))
-    tf_content = targets_file_path.read_text()
-    add_lib_re = re.compile(r'add_library\((?P<name>\S+) \w+ IMPORTED\)')
-    libs = []
-    for mat in add_lib_re.finditer(tf_content):
-        name = mat.group('name')
-        cf.output.info(f'Exporting CMake-generate library `{name}`')
-        libs.append(name)
-
-    set_properties_call_re = re.compile(
-        r'set_target_properties\((\S+) PROPERTIES[\s\n]+(.*?)[\s\n]+\)',
-        re.MULTILINE)
-    lib_data = {
-        n: {
-            'uses': [],
-            'links': [],
-            'special-uses': [],
-            'path': None,
-        }
-        for n in libs
-    }
-    pkg_requires = set()
-
-    link_only_re = re.compile(r'\$<LINK_ONLY:(.*)>')
-    ns_target_re = re.compile(r'(\S+?)::(\S+)')
-
-    knowns_libs = {}
-    for pkg in index:
-        pkg = libman.parse.parse_package_file(pkg.path)
-        namespace = pkg.namespace
-        for lib in pkg.libraries:
-            lib = libman.parse.parse_library_file(lib)
-            knowns_libs[(pkg.name, lib.name)] = {
-                'library': lib,
-                'package': pkg,
-            }
-
-    def parse_namespaced_lib(target: str, dest: List[str], namespace: str,
-                             lib: str):
-        found = knowns_libs.get((namespace, lib))
-        if not found:
-            cf.output.warn(
-                f'Target `{target}` links to known library `{namespace}::{lib}`'
-            )
-            return
-        pkg_requires.add(found['package'].name)
-        dest.append(f'{namespace}/{lib}')
-
-    def parse_single_lib(target: str, lib: str):
-        mat = link_only_re.match(lib)
-        key = 'uses'
-        if mat:
-            lib = mat.group(1)
-            key = 'links'
-
-        dest = lib_data[target]
-        specials = dest['special-uses']
-        if lib == 'Threads::Threads':
-            specials.append('Threading')
-        elif lib == 'm':
-            specials.append('Math')
-        elif lib == 'dl':
-            specials.append('DynamicLinking')
-        else:
-            mat = ns_target_re.match(lib)
-            if not mat:
-                cf.output.warn(
-                    f'Target "{target}" links to non-Conan library {lib}')
-            pkg_namespace, pkg_lib = mat.groups()
-            parse_namespaced_lib(target, dest[key], pkg_namespace, pkg_lib)
-
-    def parse_link_libs(target: str, libs: str):
-        libs = [l for l in libs.split(';') if l]
-        for l in libs:
-            parse_single_lib(target, l)
-
-    for mat in set_properties_call_re.finditer(tf_content):
-        libname = mat.group(1)
-        prop_args = shlex.split(mat.group(2).replace('\\$', '$'))
-        cf.output.info(f'Set properties: {prop_args}')
-        while prop_args:
-            key, value, prop_args = prop_args[0], prop_args[1], prop_args[2:]
-            if key == 'INTERFACE_LINK_LIBRARIES':
-                parse_link_libs(libname, value)
-
-    cf.output.info(lib_data)
-    return {
-        'libraries': lib_data,
-        'requires': pkg_requires,
-    }
-
-
-def fill_user_info(cf: conans.ConanFile, mode, **kwargs):
-    _libman_check()
-
-    index_file_path = Path(cf.build_folder) / 'conan.lmi'
-    if not index_file_path.exists():
-        raise RuntimeError(
-            'No conan.lmi index file was found. Did you run the libman Conan generator?'
-        )
-    user_info: conans.model.user_info.DepsUserInfo = cf.user_info
-    index: libman.data.Index = libman.parse.parse_index_file(index_file_path)
-    cf.output.info('Exporting libman linking information')
-
-    if mode == 'cmake':
-        ret = _fill_user_info_cmake(cf, index, user_info, kwargs)
-
-    for k in kwargs:
-        cf.output.warn(f'Unknown keyword argument to fill_user_info(): {k}')
-
-    return ret
 
 
 class ConanFile(conans.ConanFile):
     name = 'libman-generator'
     version = '0.1.0'
-    generators = 'txt'
+    generators = 'txt'  # , 'LibMan'
     exports_sources = '*', '../../cmake/libman.cmake'
-
-    requires = (
-        'catch2/2.3.0@bincrafters/stable',
-        'spdlog/1.1.0@bincrafters/stable',
-    )
 
     def package(self):
         super().package()

@@ -1,0 +1,7 @@
+Type: Library
+Name: $<IF:$<BOOL:$<TARGET_PROPERTY:something,LIBMAN_NAME>>,$<TARGET_PROPERTY:something,LIBMAN_NAME>,$<IF:$<BOOL:$<TARGET_PROPERTY:something,OUTPUT_NAME>>,$<TARGET_PROPERTY:something,OUTPUT_NAME>,something>>
+Include-Path: include
+Path: lib/$<TARGET_FILE_NAME:something>
+$<$<BOOL:$<TARGET_PROPERTY:something,INTERFACE_COMPILE_DEFINITIONS>>:Preprocessor-Define: $<JOIN:$<TARGET_PROPERTY:something,INTERFACE_COMPILE_DEFINITIONS>,
+Preprocessor-Define: >
+>Uses: spdlog/spdlog
