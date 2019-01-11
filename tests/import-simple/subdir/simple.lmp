@@ -1,0 +1,6 @@
+Type: Package
+
+Name: SimplePackage
+Namespace: SuperSimple
+
+Library: simple-lib.lml

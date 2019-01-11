@@ -1,0 +1,4 @@
+Type: Library
+
+Name: Meow
+Include-Path: header-dir
