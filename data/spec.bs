@@ -471,6 +471,13 @@ target usage requirements. “Using” targets should transitively “use” the
 libraries named by this field.
 
 
+#### `Special-Uses` #### {#file.library.fields.special-uses}
+
+- See: [[#special-reqs]]
+
+Specifies *Special Requirements* for the library.
+
+
 ### Example ### {#file.library.example}
 
 <div class="example">
@@ -699,7 +706,8 @@ but have proven very problematic for the case of unprivileged user development.
 - See: [[#file.library.fields.uses]]
 - See: [[#sema.package.namespace]]
 
-The `Uses` field is meant to represent transitive requirements. Libraries which build upon other libraries should declare this fact via `Uses`.
+The `Uses` field is meant to represent transitive requirements. Libraries which
+build upon other libraries should declare this fact via `Uses`.
 
 The syntax of a `Uses` entry is `<namespace>/<library>`, where `<namespace>` is
 the [[#file.package.fields.namespace]] field of the [[#file.package|package]]
@@ -712,3 +720,53 @@ implementation of this dependency is not specified here, but must meet the
 requirement of *transitivity*: If `A` uses `B`, and `foo` uses `A` *directly*,
 then `foo` should behave *as if* it uses `B`. `foo` is said to use `B`
 *indirectly*.
+
+
+## Special Requirements ## {#special-reqs}
+
+- See: [[#file.library.fields.special-uses]]
+
+*Special Requirements* are [[#intro.usage-requirements]] that do not correspond
+to a library or package provided by the PDM. The semantics of a Special
+Requirement are platform-specific, but their intended semantics are outlined
+here. Special requirements *may* be namespace with `<namespace>/<name>`, but
+libman reserves all unqualified names. Platforms and build systems may define
+additional Special Requirements using qualified names.
+
+
+### `Threading` ### {#special-reqs.threading}
+
+Enables threading support. Some platforms require compile and/or link options
+to enable support for threading in the compiled binary. For example, GCC
+requires `-pthread` as a compile and link option for `std::thread` and several
+other threading primitives to operate correctly.
+
+
+### `Filesystem` ### {#special-reqs.filesystem}
+
+Enables support for C++17's filesystem library. Some platforms require an
+additional support library to be linked in order to make use of the facilities
+of `std::filesystem`.
+
+
+### `DynamicLinker` ### {#special-reqs.dl}
+
+Enables support for runtime dynamic linking, for example using `dlopen()`.
+
+
+### `PosixRealtime` ### {#special-reqs.realtime}
+
+Enable support for POSIX realtime extensions. For example, required for shared
+memory functions on some platforms.
+
+
+### `Math` ### {#special-reqs.math}
+
+Enable support for `<math.h>`. Some platforms provide the definitions of the
+math functions in a separate library that is not linked by default.
+
+
+### `Sockets` ### {#special-reqs.sockets}
+
+Enable support for socket programming. For example, Windows requires linking in
+the Winsock libraries in order to make use of the Windows socket APIs.
