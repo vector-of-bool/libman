@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(LibManTest)
 
-include(${CMAKE_BINARY_DIR}/conan-libman.cmake)
+include(${CMAKE_BINARY_DIR}/libman.cmake)
 import_packages(spdlog)
 
 add_library(something something.cpp)

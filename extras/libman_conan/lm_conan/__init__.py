@@ -1,0 +1,1 @@
+"""Package for libman conan support"""

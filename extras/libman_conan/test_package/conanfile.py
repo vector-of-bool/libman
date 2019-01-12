@@ -1,18 +1,15 @@
 import conans
 
 
-class ConanFile(conans.ConanFile):
-    generators = 'LibMan'
+libman = conans.python_requires('libman/0.2.0@test/test')
 
+
+class ConanFile(libman.CMakeConanFile):
+    generators = 'LibMan'
+    libman_for = 'cmake'
     requires = (
         'spdlog/[*]@bincrafters/stable',
     )
-
-    def build(self):
-        cmake = conans.CMake(self)
-        cmake.configure()
-        cmake.build()
-        cmake.build(target='libman-export')
 
     def test(self):
         pass
