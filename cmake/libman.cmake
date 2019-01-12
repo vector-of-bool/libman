@@ -341,8 +341,27 @@ endfunction()
 ## them! You _must_ set the `LIBMAN_INDEX` variable to a path to the libman
 ## index. Recommended to let a dependency manager do this for you.
 function(import_packages)
+    set(looked_for)
     if(NOT DEFINED LIBMAN_INDEX)
-        message(FATAL_ERROR "No LIBMAN_INDEX defined")
+        foreach(cand
+                CMAKE_CURRENT_BINARY_DIR
+                PROJECT_BINARY_DIR
+                CMAKE_BINARY_DIR
+                CMAKE_CURRENT_SOURCE_DIR
+                PROJECT_SOURCE_DIR
+                CMAKE_SOURCE_DIR
+                )
+            set(cand "${${cand}}/INDEX.lmi")
+            list(APPEND looked_for "${cand}")
+            if(EXISTS "${cand}")
+                set(LIBMAN_INDEX "${cand}")
+            endif()
+        endforeach()
+    endif()
+    if(NOT DEFINED LIBMAN_INDEX)
+        list(REMOVE_DUPLICATES looked_for)
+        string(REPLACE ";" ", " looked_for "${looked_for}")
+        message(FATAL_ERROR "No LIBMAN_INDEX variable defined, and no INDEX.lmi was found (Looked for ${looked_for})")
     endif()
     get_filename_component(LIBMAN_INDEX "${LIBMAN_INDEX}" ABSOLUTE)
     # Get the location of our cached parse
