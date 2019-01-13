@@ -606,9 +606,9 @@ it should prefer the following:
 
 - A file named ``INDEX.lmi`` within the root of the project directory.
 - A file named ``INDEX.lmi`` within the root of the build directory for the
-  project.
+    project.
 - Optionally, a file named ``INDEX-<config>.lmi`` within the root of the
-  project directory.
+    project directory.
 - Optionally, a file named ``INDEX-<config>.lmi`` within the root of the build
 - directory for the project.
 
