@@ -562,7 +562,8 @@ indices, with one for each "build type" that the build system wishes to consume.
 
 ### The `libman` Tree ### {#sema.index.tree}
 
-Given a single index file, one can generate a single `libman` "tree" with the index at the root, packages at the next level, and libraries at the bottom level.
+Given a single index file, one can generate a single `libman` "tree" with the
+index at the root, packages at the next level, and libraries at the bottom level.
 
 ```text
 <index>
@@ -678,17 +679,29 @@ package was found.
 
 - See: [[#file.library]]
 
-*Libraries* are the main consumable for development package managers. In C++ we define a *library* as a set of interconnected translation units and/or `#include`-able code that provides some pre-packaged functionality that we wish to incorporate into our own project.
+*Libraries* are the main consumable for development package managers. In C++ we
+define a *library* as a set of interconnected translation units and/or
+`#include`-able code that provides some pre-packaged functionality that we wish
+to incorporate into our own project.
 
-Consuming a library requires (1) being capable of using the preprocessor `#include` directive to incorporate the headers from the library and (2) being able to resolve entities of external linkage which are defined within the headers for that library. (Some libraries may have no entities with external linkage.)
+Consuming a library requires (1) being capable of using the preprocessor
+`#include` directive to incorporate the headers from the library and (2) being
+able to resolve entities of external linkage which are defined within the
+headers for that library. (Some libraries may have no entities with external
+linkage.)
 
 
 ### Canonical `#include` Directives ### {#sema.library.canon-include}
 
-The characters within the `<>` of `#include <...>` are of incredible importance. `libman` encourages libraries to define a single "canonical" `#include` directive for their files. A user *must not* have to *guess* which include directive is correct. To support this, libraries may declare the directory in which their "canonical include directives" may be resolved via the [[#file.library.fields.include-path]] field.
+The characters within the `<>` of `#include <...>` are of incredible importance.
+`libman` encourages libraries to define a single "canonical" `#include`
+directive for their files. A user *must not* have to *guess* which include
+directive is correct. To support this, libraries may declare the directory in
+which their "canonical include directives" may be resolved via the
+[[#file.library.fields.include-path]] field.
 
 
-### Avoid Header Mixing ### {#sema.library.header-mixing}
+### Recommendation: Avoid Header Mixing ### {#sema.library.header-mixing}
 
 **Headers for libraries should avoid intermixing with the headers of other
 libraries, even of other libraries within the same package.**
