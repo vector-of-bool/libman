@@ -594,7 +594,26 @@ Note: Although `libman` uses the qualified form `<namespace>/<library>`, other
 tools may use their own format for the qualification. For example, CMake might
 use `<namespace>::<library>` to refer to the imported target or Scons may use
 `<namespace>__<library>`. It is up to the individual tool to select, implement,
-and document the appropriate qualification format for their users
+and document the appropriate qualification format for their users.
+
+
+### Index Location ### {#sema.index.location}
+
+When a build system wishes to use an index file, it should offer the user a
+way to specify the location explicitly. If no location is provided by a user,
+it should prefer the following:
+
+- A file named ``INDEX.lmi`` within the root of the project directory.
+- A file named ``INDEX.lmi`` within the root of the build directory for the
+  project.
+- Optionally, a file named ``INDEX-<config>.lmi`` within the root of the
+  project directory.
+- Optionally, a file named ``INDEX-<config>.lmi`` within the root of the build
+- directory for the project.
+
+In the above, ``<config>`` is a string specifying a "build type" for the build
+system. This is intended to facilitate build systems which are "multi-conf"
+aware.
 
 
 ## Packages ## {#sema.package}
