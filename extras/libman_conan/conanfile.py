@@ -7,7 +7,7 @@ import conans
 from lm_conan.generator import Generator
 
 # Imports that are meant to be re-imported by clients
-from lm_conan.cmake import CMakeConanFile, cmake_build, cmake_install
+from lm_conan.cmake import CMakeConanFile, cmake_build, cmake_package_exports
 
 
 # The actual class definitions are on the base class `lm_conan.generator.Generator`
