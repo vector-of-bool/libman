@@ -633,14 +633,40 @@ endfunction()
 
 # Check if we are running in __LIBMAN_INSTALL_HEADERS_MODE
 if(__LIBMAN_INSTALL_HEADERS_MODE)
+    message(STATUS "Exporting headers from project based within '${HEADER_ROOT}'")
     set(pattern_args)
     foreach(pat IN LISTS PATTERNS)
         list(APPEND pattern_args PATTERN ${pat})
     endforeach()
     file(
-        COPY "${HEADER_ROOT}/"
+        INSTALL "${HEADER_ROOT}/"
         DESTINATION "${DESTINATION}"
         USE_SOURCE_PERMISSIONS
         FILES_MATCHING ${pattern_args}
         )
+    function(_prune_if_empty dirpath)
+        if(IS_DIRECTORY "${dirpath}")
+            file(GLOB children "${dirpath}/*")
+            if(children STREQUAL "")
+                message(STATUS "Remove empty directory: ${dirpath}")
+                file(REMOVE "${dirpath}")
+                get_filename_component(pardir "${dirpath}" DIRECTORY)
+                _prune_if_empty("${pardir}")
+            endif()
+        endif()
+    endfunction()
+    message(STATUS "Pruning empty include subdirectories...")
+    file(GLOB_RECURSE files "${DESTINATION}/*")
+    file(GLOB_RECURSE dirs LIST_DIRECTORIES true "${DESTINATION}/*")
+    list(REMOVE_ITEM dirs ${files})
+    foreach(dir IN LISTS dirs)
+        file(GLOB_RECURSE files "${dir}/*")
+        # `files` will only contain files, not directories. If this dir has
+        # any file children, the list will be non-empty
+        if(files STREQUAL "")
+            message(STATUS "Removing empty directory: ${dir}")
+            file(REMOVE_RECURSE "${dir}")
+        endif()
+    endforeach()
+    return()
 endif()
