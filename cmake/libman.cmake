@@ -571,6 +571,14 @@ function(_lm_export_target target)
         set(libs)
     endif()
     foreach(lib IN LISTS libs)
+        if(lib MATCHES "^-")
+            message(WARNING
+                "export_package() for '${ARG_NAME}' exports target '${target}', "
+                "which uses link flag '${lib}'. This is not supported and will "
+                "be omitted from the export information."
+                )
+            continue()
+        endif()
         if(NOT TARGET "${lib}")
             message(WARNING
                 "export_package() for '${ARG_NAME}' exports target '${target}', "
@@ -587,27 +595,27 @@ function(_lm_export_target target)
             file(APPEND "${__lml_tmpl}" "Uses: ${ARG_NAMESPACE}/${other_name}")
         elseif(lib STREQUAL "Threads::Threads")
             file(APPEND "${__lml_tmpl}" "Special-Uses: Threading\n")
+        elseif(lib STREQUAL "std::filesystem")
+            file(APPEND "${__lml_tmpl}" "Special-Uses: Filesystem\n")
         elseif(lm_qual_name)
             file(APPEND "${__lml_tmpl}" "Uses: ${lm_qual_name}\n")
             list(APPEND required_by_usage ${lm_owning_package})
             set(required_by_usage "${required_by_usage}" PARENT_SCOPE)
         elseif(is_imported)
-            message(WARNING
-                "export_package() for '${ARG_NAME}' exports target '${target}', "
-                "which links to imported target '${lib}', but '${lib}' is not "
-                "supported. It will be omitted from the export information."
+            file(APPEND "${__lml_tmpl}" "X-CMake-Link: ${lib}\n")
+            message(STATUS
+                "NOTE: Exported target '${target}' links to '${lib}', which is "
+                "an imported library with no associated package information."
+                )
+            message(STATUS
+                "NOTE: Downstream CMake projects which link to '${target}' will "
+                "link to '${lib}' verbatim without dependency information."
                 )
         elseif(TARGET "${lib}")
             message(WARNING
                 "export_package() for '${ARG_NAME}' exports target '${target}', "
                 "which links to CMake target '${lib}', but '${lib}' is not exported "
                 "by export_package()"
-                )
-        elseif(lib MATCHES "^-")
-            message(WARNING
-                "export_package() for '${ARG_NAME}' exports target '${target}', "
-                "which uses link flag '${lib}'. This is not supported and will "
-                "be omitted from the export information."
                 )
         else()
             message(WARNING
