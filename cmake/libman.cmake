@@ -456,13 +456,12 @@ Namespace: ${ARG_NAMESPACE}
         get_filename_component(dir "${dir}" ABSOLUTE)
         string(MD5 dir_hash "${dir}")
         string(SUBSTRING "${dir_hash}" 0 6 dir_hash)
-        set(stamp_file "${CMAKE_CURRENT_BINARY_DIR}/_libman/headers-${ARG_NAME}.stamp")
+        set(stamp_file "${CMAKE_CURRENT_BINARY_DIR}/_libman/headers-${dir_hash}.stamp")
         set(existing_headers)
         foreach(pat IN LISTS header_patterns)
             file(GLOB_RECURSE more_headers CONFIGURE_DEPENDS "${dir}/${pat}")
             list(APPEND existing_headers ${more_headers})
         endforeach()
-        message(STATUS "Depends on ${existing_headers}")
         add_custom_command(
             OUTPUT "${stamp_file}"
             DEPENDS ${ARG_HEADERS_DEPENDS} ${existing_headers}
@@ -476,8 +475,8 @@ Namespace: ${ARG_NAMESPACE}
             COMMENT "Copying headers from ${dir} to libman export"
             VERBATIM
             )
-        add_custom_target(libman-export-headers-${ARG_NAME} ${all_arg} DEPENDS "${stamp_file}")
-        add_dependencies(libman-export libman-export-headers-${ARG_NAME})
+        add_custom_target(libman-export-headers-${dir_hash} ${all_arg} DEPENDS "${stamp_file}")
+        add_dependencies(libman-export libman-export-headers-${dir_hash})
     endforeach()
 
     set(required_by_usage)
