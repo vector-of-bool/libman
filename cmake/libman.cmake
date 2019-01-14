@@ -198,6 +198,24 @@ function(_lm_import_lib pkg namespace lib_path)
                 "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES [[${use_ns}::${use_lib}]])\n"
                 )
         endforeach()
+        # Add verbatim links
+        foreach(link IN LISTS lib__X-CMake-Link)
+            file(APPEND
+                "${lib_cmake_file}.tmp"
+                "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES [[${link}]])\n"
+                )
+        endforeach()
+        # Add special requirements
+        foreach(req IN LISTS Lib__Special-Uses)
+            if(req STREQUAL "Threading")
+                file(APPEND
+                    "${lib_cmake_file}.tmp"
+                    "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES [[Threads::Threads]])\n"
+                    )
+            else()
+                message(WARNING "Un-implemented special requirement '${req}' for imported target '${target_name}'")
+            endif()
+        endforeach()
         # Commit
         file(RENAME "${lib_cmake_file}.tmp" "${lib_cmake_file}")
     endif()
@@ -677,3 +695,6 @@ if(__LIBMAN_INSTALL_HEADERS_MODE)
     endforeach()
     return()
 endif()
+
+# Define the threading interface lib, used for the `Threading` requirement
+find_package(Threads)
