@@ -8,8 +8,8 @@ add_library(some-library
     src/simple.hpp
     )
 
-export_package(
-    ADD_TO_ALL
-    TARGETS some-library
+export_package(ADD_TO_ALL)
+
+export_library(some-library
     HEADER_ROOTS src
     )

@@ -8,9 +8,5 @@ file(GLOB_RECURSE sources src/*)
 target_sources(say-hello PRIVATE ${sources})
 set_property(TARGET say-hello PROPERTY LIBMAN_NAME hello)
 
-export_package(
-    ADD_TO_ALL
-    NAMESPACE say
-    TARGETS say-hello
-    HEADER_ROOTS src
-    )
+export_package(ADD_TO_ALL NAMESPACE say)
+export_library(say-hello HEADER_ROOTS src)

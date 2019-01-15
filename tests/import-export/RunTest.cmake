@@ -39,7 +39,7 @@ Type: Index
 Package: HelloLibrary; @BINDIR_BASE@/say-hello-library/build/HelloLibrary.libman-export/HelloLibrary.lmp
 ]] lmi @ONLY)
 
-set(gen_index "${BINDIR_BASE}/index.lmi")
+set(gen_index "${BINDIR_BASE}/test-index.lmi")
 file(WRITE "${gen_index}" "${lmi}")
 
 build_project(say-hello-app app -D LIBMAN_INDEX=${gen_index})
