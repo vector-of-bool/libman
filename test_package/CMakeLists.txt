@@ -10,8 +10,5 @@ add_library(something something.cpp)
 # created that transitive usage and the compile will succeed
 target_link_libraries(something PUBLIC spdlog::spdlog)
 
-export_package(
-    REQUIRES meow
-    HEADER_ROOTS src
-    TARGETS something
-    )
+export_package(REQUIRES meow)
+export_library(something HEADER_ROOTS src)

@@ -1,24 +1,19 @@
+"""
+Module for handling .libman-export directories
+"""
+
 import conans
 from pathlib import Path
 import shutil
-from typing import Set, Optional
+
+from typing import Optional, Set
 
 
-def cmake_build(cf: conans.ConanFile, **kwargs):
-    """
-    Build the libman-aware project in the provided ConanFile with CMake. Build
-    the ``libman-export`` target.
-
-    :param conans.ConanFile cf: The ConanFile defining the project.
-    :param kwargs: Keyword arguments forwarded to the ``conans.CMake`` constructor.
-    """
-    cmake = conans.CMake(cf, kwargs)
-    cmake.build_folder = 'cmake-build'
-    cmake.configure()
-    cmake.build(target='libman-export')
+class AlreadyPackaged(RuntimeError):
+    pass
 
 
-def cmake_package_exports(cf: conans.ConanFile, exported: Optional[Set[Path]] = None) -> Set[Path]:
+def package_exports(cf: conans.ConanFile, exported: Optional[Set[Path]] = None) -> Set[Path]:
     """
     Copy any libman export roots to the package directory for the Conan project.
 
@@ -37,8 +32,6 @@ def cmake_package_exports(cf: conans.ConanFile, exported: Optional[Set[Path]] = 
     exported = set(exported or set())
 
     lm_exports = list(Path(cf.build_folder).glob('**/*.libman-export'))
-    if not len(lm_exports):
-        raise RuntimeError('Package did not create any .libman-export directories. Did you call export_package()?')
 
     exported_names = set(exp.name for exp in exported)
     for export in lm_exports:
@@ -46,11 +39,11 @@ def cmake_package_exports(cf: conans.ConanFile, exported: Optional[Set[Path]] = 
             # This directory was already exported once. Don't export it again
             continue
         # Check that another export with the same name hasn't already been copied
+        cf.output.info(f'Packaging libman export "{export.stem}" ({export})')
         if export.name in exported_names:
-            raise RuntimeError(f'More than one export directory with name "{export.stem}"!')
+            raise AlreadyPackaged(f'More than one export directory with name "{export.stem}"!')
         # Calc the destination for the export and do the copy
         dest = Path(cf.package_folder) / export.name
-        cf.output.info(f'Packaging libman export "{export.stem}" ({export})')
         shutil.copytree(export, dest)
         # Record what has been exported
         exported.add(export)
@@ -60,16 +53,19 @@ def cmake_package_exports(cf: conans.ConanFile, exported: Optional[Set[Path]] = 
     return exported
 
 
-class CMakeConanFile(conans.ConanFile):
+class ExportCopier:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__exported: Set[Path] = set()
+        self.__already_exported = set()
 
-    def build(self):
-        cmake_build(self)
+    def package_exports(self):
+        assert getattr(self, 'package_folder', None), 'No package_folder is defined'
+        assert isinstance(self, conans.ConanFile), 'ExportCopier derived classes must also derive from ConanFile'
+        self.__already_exported = package_exports(self, self.__already_exported)
+        assert len(self.__already_exported) > 0, 'No directories have been exported'
 
     def package(self):
-        self.__exported = cmake_package_exports(self, self.__exported)
+        self.package_exports()
 
     def package_info(self):
         self.user_info.libman_simple = True

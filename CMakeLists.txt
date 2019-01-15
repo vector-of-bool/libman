@@ -9,11 +9,13 @@ project(libman
 
 include(libman)
 
+# Global options
+
 # Randomly pick between using vcpkg or Conan, to ensure that we are always able
 # to build with either
 include(pmm.cmake)
 string(RANDOM LENGTH 1 ALPHABET 01 use_vcpkg)
-if(use_vcpkg OR LIBMAN_USE_VCPKG)
+if((use_vcpkg OR LIBMAN_USE_VCPKG) AND NOT CONAN_EXPORTED)
     pmm(VCPKG
         REVISION 43deeaf0c8b6086310ee753be2e93c941f7ffd75
         REQUIRES catch2
@@ -23,12 +25,19 @@ else()
     conan_set_find_paths()
 endif()
 
+# We also want the community modules
+pmm(CMakeCM ROLLING)
+
 find_package(Catch2 REQUIRED)
 
-find_package(Bikeshed)
+option(BUILD_SPEC "Build the specification document" ON)
+if(BUILD_SPEC)
+    find_package(Bikeshed)
+endif()
+add_subdirectory(data)
+
 
 add_subdirectory(src)
-add_subdirectory(data)
 
 option(BUILD_TESTING "Build tests" ON)
 if(BUILD_TESTING AND (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR))
@@ -38,10 +47,10 @@ endif()
 
 add_subdirectory(extras)
 
-add_subdirectory(docs)
+option(BUILD_DOCS "Build the documentation" ON)
+if(BUILD_DOCS)
+    add_subdirectory(docs)
+endif()
 
-export_package(
-    NAMESPACE lm
-    HEADER_ROOTS src
-    TARGETS libman
-    )
+export_package(NAMESPACE libman)
+export_library(libman HEADER_ROOTS src)

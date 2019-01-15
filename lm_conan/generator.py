@@ -135,7 +135,7 @@ class AutoPackage:
         # important information ourselves manually
         for req in self.requires:
             other_pkg = all_pkgs[req]
-            if not other_pkg.has_libman_data:
+            if not getattr(other_pkg, 'has_libman_data', False):
                 lines.append(f'Uses: {other_pkg.name}/{other_pkg.name}')
             else:
                 for other_lib in other_pkg.libs:
