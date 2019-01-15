@@ -15,7 +15,7 @@ add_custom_command(
         -b html
         -q
         -j6
-        -a
+        -W
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${doc_build_dir}"
     COMMENT "Generating documentation"
