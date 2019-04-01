@@ -14,7 +14,7 @@ def cmake_build(cf: conans.ConanFile, **kwargs):
     :param conans.ConanFile cf: The ConanFile defining the project.
     :param kwargs: Keyword arguments forwarded to the ``conans.CMake`` constructor.
     """
-    cmake = conans.CMake(cf, kwargs)
+    cmake = conans.CMake(cf, **kwargs)
     cmake.build_folder = 'cmake-build'
     cmake.configure()
     cmake.build(target='libman-export')
