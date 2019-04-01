@@ -9,28 +9,10 @@ import conans.model
 from conans.model.user_info import DepsUserInfo, UserInfo
 from conans.model.build_info import DepsCppInfo, CppInfo
 
+from .data import Library
 
-class LibManLibrary:
-    def __init__(
-            self,
-            name: str,
-            paths: List[Path],
-            includes: List[Path],
-            defines: List[str],
-            uses: List[str],
-            special_uses: List[str],
-            infos: List[str],
-            warnings: List[str],
-    ):
-        self.name = name
-        self.paths = paths
-        self.include_paths = includes
-        self.defines = defines
-        self.uses = uses
-        self.special_uses = special_uses
-        self.infos = infos
-        self.warnings = warnings
 
+class LibManLibrary(Library):
     @classmethod
     def find_linkable(cls, lib: str, lib_paths: List[str]) -> Optional[Path]:
         for lib_path in lib_paths:
@@ -115,22 +97,7 @@ class AutoPackage:
 
     def _generate_library_file(self, all_pkgs: Dict[str, 'AutoPackage'],
                                lib: LibManLibrary) -> Dict[str, str]:
-        lines = [
-            '# libman library file generate by Conan. DO NOT EDIT.',
-            'Type: Library',
-            f'Name: {lib.name}',
-        ]
-        for inc in lib.include_paths:
-            lines.append(f'Include-Path: {inc}')
-        for def_ in lib.defines:
-            lines.append(f'Preprocessor-Define: {def_}')
-        for path in lib.paths:
-            lines.append(f'Path: {path}')
-        for special in lib.special_uses:
-            lines.append(f'Special-Uses: {special}')
-        for uses in lib.uses:
-            lines.append(f'Uses: {uses}')
-
+        lines = lib.get_lines()
         # The package did not expose libman data, so we must generate some
         # important information ourselves manually
         for req in self.requires:
