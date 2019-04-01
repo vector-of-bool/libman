@@ -7,7 +7,7 @@ if(BUILD_SPEC)
 
         add_custom_command(
             OUTPUT "${bs_html}"
-            SOURCES "${bs_input}"
+            DEPENDS "${bs_input}"
             COMMAND Bikeshed::Bikeshed spec "${bs_input}" "${bs_html}"
             COMMENT "Rendering specification to ${bs_html}"
             )
