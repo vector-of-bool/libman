@@ -716,9 +716,12 @@ function(export_library exp_target)
         endif()
         get_target_property(lm_qual_name "${lib}" libman_QUALIFIED_NAME)
         get_target_property(lm_owning_package "${lib}" libman_OWNING_PACKAGE)
-        get_target_property(lm_verbatim_link_ok "${lib}" libman_VERBATIM_LINK_OKAY)
+        get_target_property(lm_verbatim_link_ok "${lib}" libman_VERBATIM_LINK_OK)
+        get_target_property(lm_ignore_this "${lib}" libman_IGNORE)
         get_target_property(is_imported "${lib}" IMPORTED)
-        if(TARGET "${lib}" AND NOT is_imported)
+        if(lm_ignore_this)
+            # Do nothing
+        elseif(TARGET "${lib}" AND NOT is_imported)
             if(NOT lib IN_LIST already_exported)
                 message(WARNING
                     "export_library(${exp_target}): ${exp_target} links to CMake "
