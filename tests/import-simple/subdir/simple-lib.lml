@@ -2,3 +2,5 @@ Type: Library
 
 Name: Meow
 Include-Path: header-dir
+
+X-CMake-Property: _DUMMY_PROP := 12
