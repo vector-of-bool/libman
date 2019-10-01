@@ -838,7 +838,7 @@ if(__LIBMAN_INSTALL_HEADERS_MODE)
     message(STATUS "Pruning empty include subdirectories...")
     file(GLOB_RECURSE files "${DESTINATION}/*")
     file(GLOB_RECURSE dirs LIST_DIRECTORIES true "${DESTINATION}/*")
-    list(REMOVE_ITEM dirs ${files})
+    list(REMOVE_ITEM dirs ${files} ~~~/::~)
     foreach(dir IN LISTS dirs)
         file(GLOB_RECURSE files "${dir}/*")
         # `files` will only contain files, not directories. If this dir has
