@@ -22,25 +22,15 @@ class LibMan(Generator):
 
 class ConanFile(CMakeConanFile):
     name = 'libman'
-    version = '0.2.0'
-    build_requires = (
-        'catch2/2.3.0@bincrafters/stable',
-    )
+    version = '0.2.0+dev12'
+    build_requires = ('catch2/2.3.0@bincrafters/stable', )
     generators = 'cmake'
-    exports = (
-        'lm_conan/*',
-    )
-    exports_sources = (
-        '*',
-        '!build/*',
-        '!.tox/*',
-    )
+    exports = ('lm_conan/*', )
+    exports_sources = ('cmake/libman.cmake', )
+    settings = ()
 
     def build(self):
-        cmake = conans.CMake(self)
-        cmake.configure(args=[f'-C{self.source_folder}/cmake/ConanConfig.cmake'])
-        cmake.build(target='libman-export')
+        pass
 
     def package(self):
         self.copy('cmake/libman.cmake', keep_path=False)
-        super().package()
