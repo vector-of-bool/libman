@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Iterable
 from pathlib import Path
 from itertools import chain
 
@@ -10,6 +10,7 @@ from conans.model.user_info import DepsUserInfo, UserInfo
 from conans.model.build_info import DepsCppInfo, CppInfo
 
 from .data import Library
+from .vs import generate_msbuild_props
 
 
 class LibManLibrary(Library):
@@ -62,7 +63,7 @@ class LibManLibrary(Library):
                     )
                     paths.append(found)
                 else:
-                    warings.append(f'Unresolved library {name}')
+                    warnings.append(f'Unresolved library {name}')
         return LibManLibrary(
             name,
             paths,
@@ -240,12 +241,29 @@ class Generator(conans.model.Generator):
         ret['INDEX.lmi'] = '\n'.join(index_lines)
 
         # Generate build-system specific helper files if they have been requested
-        cf_wants_cmake = getattr(self.conanfile, 'libman_for', None) == 'cmake'
-        env_wants_cmake = os.getenv('CONAN_LIBMAN_FOR') == 'cmake'
-        if cf_wants_cmake or env_wants_cmake:
-            lm_pkg_dir = self.deps_build_info['libman'].rootpath
-            libman_cmake = (Path(lm_pkg_dir) / 'libman.cmake').read_text()
-            ret['libman.cmake'] = libman_cmake
+        lm_for = getattr(self.conanfile, 'libman_for', [])
+        if isinstance(lm_for, str):
+            lm_for = [lm_for]
+        # Generate for each libman generator
+        for lm_gen in lm_for:
+            if lm_gen == 'cmake':
+                lm_pkg_dir = self.deps_build_info['libman'].rootpath
+                libman_cmake = (Path(lm_pkg_dir) / 'libman.cmake').read_text()
+                ret['libman.cmake'] = libman_cmake
+            elif lm_gen in ('vs', 'visualstudio'):
+                msb_prop_content = generate_msbuild_props(ret.copy(), self.conanfile)
+                fname: str = getattr(self.conanfile, 'libman_vs_filename', 'Libman.targets')
+                vs_platform = {
+                    'x86': 'Win32',
+                    'x86_64': 'x64',
+                    None: 'NoArch',
+                }[str(self.conanfile.settings.arch)]
+                fname = fname.format(settings=self.conanfile.settings, vs_platform=vs_platform)
+                ret[fname] = msb_prop_content
+            elif lm_for is None:
+                pass
+            else:
+                raise RuntimeError(f'Unknown `libman_for` value: {lm_for}')
 
         return ret
 
