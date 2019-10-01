@@ -240,12 +240,19 @@ function(_lm_import_lib pkg namespace lib_path)
                 )
         endforeach()
         # Add special requirements
-        foreach(req IN LISTS Lib__Special-Uses)
+        foreach(req IN LISTS lib__Special-Uses)
             if(req STREQUAL "Threading")
                 file(APPEND
                     "${lib_cmake_file}.tmp"
                     "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES [[Threads::Threads]])\n"
                     )
+            elseif(req STREQUAL "Sockets")
+                if(WIN32)
+                    file(APPEND
+                        "${lib_cmake_file}.tmp"
+                        "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES Ws2_32)\n"
+                        )
+                endif()
             else()
                 message(WARNING "Un-implemented special requirement '${req}' for imported target '${target_name}'")
             endif()
