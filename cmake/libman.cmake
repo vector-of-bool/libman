@@ -45,6 +45,15 @@
 # A variable to note the path to this file
 set(LIBMAN_CMAKE_SCRIPT "${CMAKE_CURRENT_LIST_FILE}")
 
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    define_property(TARGET
+        PROPERTY libman_EXPORT_PROPERTIES
+        INHERITED
+        BRIEF_DOCS "Properties to export in the libman file"
+        FULL_DOCS "This adds X-CMake-Property lines to the libman library manifest for each property listed."
+        )
+    set_property(DIRECTORY PROPERTY libman_EXPORT_PROPERTIES "")
+endif()
 
 ## Rewrites a path to be absolute, based on the directory containing `filepath`
 # NOTE: `filepath` is a _file_ path, not a directory path. The filename will be
@@ -719,6 +728,31 @@ function(export_library exp_target)
                 "It will be omitted from the export information."
                 )
         endif()
+    endforeach()
+
+    get_target_property(export_props "${exp_target}" libman_EXPORT_PROPERTIES)
+    foreach(compat_prop
+            COMPATIBLE_INTERFACE_BOOL
+            COMPATIBLE_INTERFACE_NUMBER_MAX
+            COMPATIBLE_INTERFACE_NUMBER_MIN
+            COMPATIBLE_INTERFACE_STRING
+            )
+        get_target_property(propval "${exp_target}" "${compat_prop}")
+        if(NOT propval STREQUAL "propval-NOTFOUND")
+            list(APPEND export_props ${propval})
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES export_props)
+    foreach(prop IN LISTS export_props compat_string compat_bool compat_num_min compat_num_max)
+        string(GENEX_STRIP "${prop}" wo_genex)
+        if(NOT wo_genex STREQUAL prop)
+            message(WARNING "libman_EXPORT_PROPERTIES does not support generator expressions (Found export of `${prop}`)")
+            continue()
+        endif()
+        set(prop_genex "$<TARGET_PROPERTY:${exp_target},${prop}>")
+        set(is_empty "$<STREQUAL:,${prop_genex}>")
+        set(not_empty "$<NOT:${is_empty}>")
+        file(APPEND "${__lml_tmpl}" "$<${not_empty}:X-CMake-Property: ${prop} := $<TARGET_PROPERTY:${exp_target},${prop}>\n>")
     endforeach()
 
     # Add the Requires fields to the package
