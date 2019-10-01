@@ -154,7 +154,7 @@ function(_lm_import_lib pkg namespace lib_path)
         # Detemine the linkage type
         if(lib__Path MATCHES "${CMAKE_STATIC_LIBRARY_SUFFIX}$")
             set(linkage STATIC)
-        elseif(lib__Path MATCHES "${CMAKE_SHARED_LIBRARY_SUFFIX}$")
+        elseif(lib__Path MATCHES "${CMAKE_SHARED_LIBRARY_SUFFIX}(\\.[0-9]+)*$")
             set(linkage SHARED)
         elseif(lib__Path)
             message(WARNING "We don't recognize the type of import library: ${lib__Path}")
