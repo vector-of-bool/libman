@@ -214,6 +214,19 @@ function(_lm_import_lib pkg namespace lib_path)
                 "set_property(TARGET [[${target_name}]] APPEND PROPERTY INTERFACE_LINK_LIBRARIES [[${link}]])\n"
                 )
         endforeach()
+        # Add CMake properties
+        foreach(propspec IN LISTS lib__X-CMake-Property)
+            if(NOT propspec MATCHES "([^ ]+) := (.*)")
+                message(WARNING "Library has invalid X-CMake-Property line: ${propspec}")
+                continue()
+            endif()
+            set(prop_name "${CMAKE_MATCH_1}")
+            set(prop_val "${CMAKE_MATCH_2}")
+            file(APPEND
+                "${lib_cmake_file}.tmp"
+                "set_property(TARGET [[${target_name}]] APPEND PROPERTY [[${prop_name}]] [[${prop_val}]])\n"
+                )
+        endforeach()
         # Add special requirements
         foreach(req IN LISTS Lib__Special-Uses)
             if(req STREQUAL "Threading")
