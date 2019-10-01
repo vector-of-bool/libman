@@ -257,6 +257,16 @@ function(_lm_import_lib pkg namespace lib_path)
                 message(WARNING "Un-implemented special requirement '${req}' for imported target '${target_name}'")
             endif()
         endforeach()
+        # Add CMake inclusions
+        foreach(inc IN LISTS lib__X-CMake-Include)
+            set(orig "${inc}")
+            _lm_resolve_path_from_file(inc "${lib_path}")
+            file(APPEND
+                "${lib_cmake_file}.tmp"
+                "\n# Inclusion from X-CMake-Include: ${orig}\n"
+                "set_property(GLOBAL APPEND PROPERTY _LIBMAN_PENDING_INCLUDES [[${inc}]])\n"
+                )
+        endforeach()
         # Commit
         file(RENAME "${lib_cmake_file}.tmp" "${lib_cmake_file}")
     endif()
@@ -315,6 +325,16 @@ function(_lm_load_package name)
             file(APPEND
                 "${pkg_cmake_file}.tmp"
                 "set_property(GLOBAL APPEND PROPERTY [[libman_PACKAGES/${name}::Libraries]] [[${lib}]])\n"
+                )
+        endforeach()
+        # CMake inclusions
+        foreach(inc IN LISTS pkg__X-CMake-Include)
+            set(orig "${inc}")
+            _lm_resolve_path_from_file(inc "${pkg_file}")
+            file(APPEND
+                "${pkg_cmake_file}.tmp"
+                "\n# Package inclusion from X-CMake-Include: ${orig}\n"
+                "set_property(GLOBAL APPEND PROPERTY _LIBMAN_PENDING_INCLUDES [[${inc}]])\n"
                 )
         endforeach()
         # Commit
@@ -399,7 +419,16 @@ endfunction()
 ## The only public interface for libman! Name your packages, and we'll import
 ## them! You _must_ set the `LIBMAN_INDEX` variable to a path to the libman
 ## index. Recommended to let a dependency manager do this for you.
-function(import_packages)
+macro(import_packages)
+    set_property(GLOBAL PROPERTY _LIBMAN_PENDING_INCLUDES "")
+    _lm_do_import_packages(${ARGN})
+    get_cmake_property(__pending_includes _LIBMAN_PENDING_INCLUDES)
+    foreach(inc IN LISTS __pending_includes)
+        include("${inc}")
+    endforeach()
+endmacro()
+
+function(_lm_do_import_packages)
     set(looked_for)
     if(NOT DEFINED LIBMAN_INDEX)
         foreach(cand
