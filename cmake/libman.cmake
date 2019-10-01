@@ -815,6 +815,9 @@ if(__LIBMAN_INSTALL_HEADERS_MODE)
     foreach(pat IN LISTS PATTERNS)
         list(APPEND pattern_args PATTERN ${pat})
     endforeach()
+    if(NOT IS_DIRECTORY "${HEADER_ROOT}")
+        message(WARNING "Header root '${HEADER_ROOT}' is not an existing directory")
+    endif()
     file(
         INSTALL "${HEADER_ROOT}/"
         DESTINATION "${DESTINATION}"
