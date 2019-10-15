@@ -53,18 +53,27 @@ def _add_library(prop_group: ET.Element, autodefs: ET.Element, ns: str, lmp_path
         else:
             return str(lml_path.parent / p)
 
+    # TODO: Transitive dependencies!
+
+    condition = f'$([System.Text.RegularExpressions.Regex]::IsMatch($(LibmanUses), ".*(;|^)\s*{ns}/{name}\s*(;|$).*"))'
+
     resolved_includes = (_resolve(inc) for inc in includes)
     inc_prop = f'libman--{ns}__{name}--Include-Path'
     ET.SubElement(prop_group, inc_prop).text = ';'.join(resolved_includes)
     aid = 'AdditionalIncludeDirectories'
-    ET.SubElement(ET.SubElement(autodefs, 'ClCompile'),
-                  aid).text = f'$({inc_prop});%({aid})'
+    ET.SubElement(
+        ET.SubElement(autodefs, 'ClCompile', {'Condition': condition}),
+        aid,
+    ).text = f'$({inc_prop});%({aid})'
+
     if lib_path:
         link_prop = f'libman--{ns}__{name}--Path'
         ET.SubElement(prop_group, link_prop).text = _resolve(lib_path)
         adeps = 'AdditionalDependencies'
-        ET.SubElement(ET.SubElement(autodefs, 'Link'),
-                      adeps).text = f'$({link_prop});%({adeps})'
+        ET.SubElement(
+            ET.SubElement(autodefs, 'Link', {'Condition': condition}),
+            adeps,
+        ).text = f'$({link_prop});%({adeps})'
 
 
 def _add_pkg(prop_group: ET.Element, autodefs: ET.Element, name: str, path: str,
@@ -120,6 +129,10 @@ def generate_msbuild_props(data: Dict[str, str], cf: ConanFile) -> str:
             })
 
     prop_group = ET.SubElement(root, 'PropertyGroup')
+    ET.SubElement(prop_group, 'LibmanUses', {
+        'Condition': "'$(LibmanUses)' == ''",
+    })
+
     autodefs = ET.SubElement(root, 'ItemDefinitionGroup', {
         'Condition': "'$(LibmanDisableAutoUsage)' == ''",
     })

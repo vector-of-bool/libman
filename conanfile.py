@@ -22,7 +22,7 @@ class LibMan(Generator):
 
 class ConanFile(CMakeConanFile):
     name = 'libman'
-    version = '0.2.0+dev12'
+    version = '0.2.0+dev13'
     build_requires = ('catch2/2.3.0@bincrafters/stable', )
     generators = 'cmake'
     exports = ('lm_conan/*', )
